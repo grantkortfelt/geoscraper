@@ -2,6 +2,10 @@ import requests
 from bs4 import BeautifulSoup
 from itertools import product
 import string
+import threading
+
+lock = threading.Lock()
+file_path = 'found.txt'
 
 def check_page_not_found(url):
     try:
@@ -16,19 +20,27 @@ def check_page_not_found(url):
         return True
 
 
-def url_generator():
+def url_generator(pid):
     base_url = "https://www.geoguessr.com/join/"
     characters = string.ascii_uppercase + string.digits
-    for combination in product(characters, repeat=5):
-        url = base_url + ''.join(combination)
-        yield url
+    for combo in product(characters, repeat=4):
+        code = pid + ''.join(combo)
+        url = base_url + code
+        if check_page_not_found(url):
+            if code[4] == "A": # this is just to make the terminal scrollable, otherwise it's a mess
+                print(f"[Thread {pid}]: {code} was not found")
+        else:
+            print(f"[Thread {pid}]: -----{code} was found-----")
+            with lock:
+                with open(file_path, 'a') as f:
+                    f.write(f"{url}\n")
 
-for url in url_generator():
-    party_code = url[-5:]
-    if check_page_not_found(url):
-        if party_code[4] == "A":
-            print(f"{party_code} was not found")
-    else:
-        print(f"-----{party_code} was found-----")
-        with open('found.txt', 'a') as f:
-            f.write(f"{url}\n")
+threads = []
+
+for character in string.ascii_uppercase + string.digits:
+    t = threading.Thread(target=url_generator, args=(character,), name=character)
+    threads.append(t)
+    t.start()
+
+for t in threads:
+    t.join()
